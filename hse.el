@@ -81,20 +81,35 @@ this command and kill the edit buffer."
 	    (set (make-local-variable 'hse-code-beg) code-beg)
 	    (set (make-local-variable 'hse-code-end) code-end)
 	    (local-set-key "\C-c'" 'hse-update-and-kill)
+	    (local-set-key "\C-x\C-s" (lambda ()
+					(interactive)
+					(hse-send-changes-back t)))
 	    (pop-to-buffer edit-buffer)))))))
 
 (defun hse-update-and-kill ()
   "Ship the changes to the originating buffer and kill the edit buffer."
   (interactive)
+  (hse-send-changes-back)
+  (quit-window t))
+
+(defun hse-send-changes-back (&optional save)
+  "Send the changes back to the originating buffer.
+
+With SAVE non-nil, it will also make the originating buffer
+saved."
+  (interactive)
   (let ((new-code (buffer-substring-no-properties (point-min) (point-max)))
 	(old-code-beg hse-code-beg)
 	(old-code-end hse-code-end))
-    (with-current-buffer hse-base-buffer
-      (delete-region old-code-beg old-code-end)
-      (save-excursion
-	(goto-char old-code-beg)
-	(insert new-code)))
-    (quit-window t)))
+    (setq hse-code-end
+	  (with-current-buffer hse-base-buffer
+	    (save-excursion
+	      (delete-region old-code-beg old-code-end)
+	      (goto-char old-code-beg)
+	      (insert new-code)
+	      (if save
+		  (save-buffer))
+	      (point))))))
 
 (defun hse-find-block-by-delims-bf (beg-delim end-delim)
   (let ((cursor (point))
