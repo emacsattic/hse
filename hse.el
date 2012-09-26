@@ -60,10 +60,16 @@ this command and kill the edit buffer."
   (interactive)
   (let ((code-block-info (hse-find-mode-match)))
     (when code-block-info
+      ;; When the old code is deleted, the code-beg and code-end
+      ;; markers will overlap. The later insertion of code will happen
+      ;; at the place where they point. To let the code-end go and the
+      ;; code-beg stand still, the type of them are different: `nil'
+      ;; makes code-beg not advance when text is inserted at its
+      ;; position and `t' makes code-end do.
       (let ((base-buffer (current-buffer))
 	    (target-major-mode (car code-block-info))
-	    (code-beg (cadr code-block-info))
-	    (code-end  (cddr code-block-info))
+	    (code-beg (copy-marker (cadr code-block-info) nil))
+	    (code-end  (copy-marker (cddr code-block-info) t))
 	    (edit-buffer (get-buffer
 			  (format "*Hybrid Source Edit - %s*"
 				  (buffer-name (current-buffer))))))
@@ -98,18 +104,19 @@ this command and kill the edit buffer."
 With SAVE non-nil, it will also make the originating buffer
 saved."
   (interactive)
+  ;; since hse-* are buffer-local, we'll have to make copies of them
+  ;; first before handling the base buffer.
   (let ((new-code (buffer-substring-no-properties (point-min) (point-max)))
-	(old-code-beg hse-code-beg)
-	(old-code-end hse-code-end))
-    (setq hse-code-end
-	  (with-current-buffer hse-base-buffer
-	    (save-excursion
-	      (delete-region old-code-beg old-code-end)
-	      (goto-char old-code-beg)
-	      (insert new-code)
-	      (if save
-		  (save-buffer))
-	      (point))))))
+	(code-beg hse-code-beg)
+	(code-end hse-code-end))
+    (with-current-buffer hse-base-buffer
+      (let ((current-point (point)))
+	(save-excursion
+	  (delete-region code-beg code-end)
+	  (goto-char code-beg)
+	  (insert new-code)
+	  (if save
+	      (save-buffer)))))))
 
 (defun hse-find-block-by-delims-bf (beg-delim end-delim)
   (let ((cursor (point))
