@@ -66,47 +66,47 @@ this command and kill the edit buffer."
   (interactive)
   (let ((code-block-info (hse-find-mode-match)))
     (when code-block-info
-      ;; When the old code is deleted, the code-beg and code-end
-      ;; markers will overlap. The later insertion of code will happen
-      ;; at the place where they point. To let the code-end go and the
-      ;; code-beg stand still, the type of them are different: `nil'
-      ;; makes code-beg not advance when text is inserted at its
-      ;; position and `t' makes code-end do.
       (let ((base-buffer (current-buffer))
 	    (target-major-mode (car code-block-info))
-	    (code-beg (copy-marker (cadr code-block-info) nil))
-	    (code-end  (copy-marker (cddr code-block-info) t))
+	    (code-beg (cadr code-block-info))
+	    (code-end (cddr code-block-info))
 	    (edit-buffer (get-buffer
 			  (format "*Hybrid Source Edit - %s*"
 				  (buffer-name (current-buffer))))))
 	(block nil
 	  (if edit-buffer
-	      (if (yes-or-no-p "Changes to another code block will be discarded. Proceed?")
+	      (if (yes-or-no-p
+		   "Changes to another code block will be discarded. Proceed?")
 		  (kill-buffer edit-buffer)
 		(return)))
+	  ;; with FRONT-ADVANCE nil and REAR-ADVANCE t, the overlay
+	  ;; will cover the code region correctly even when all the
+	  ;; text inside it is deleted.
 	  (let ((code-region
 		 (make-overlay code-beg code-end (current-buffer) nil t)))
 	    (overlay-put code-region
-			 'face 'hse-code-region))
-	  
-	  (setq edit-buffer (get-buffer-create (format "*Hybrid Source Edit - %s*"
-						       (buffer-name base-buffer))))
-	  (copy-to-buffer edit-buffer code-beg code-end)
-	  (with-current-buffer edit-buffer
-	    (funcall target-major-mode)
-	    (set (make-local-variable 'hse-base-buffer) base-buffer)
-	    (set (make-local-variable 'hse-code-beg) code-beg)
-	    (set (make-local-variable 'hse-code-end) code-end)
-	    (local-set-key "\C-c'" 'hse-update-and-kill)
-	    (local-set-key "\C-x\C-s" (lambda ()
-					(interactive)
-					(hse-send-changes-back t)))
-	    (pop-to-buffer edit-buffer)))))))
+			 'face 'hse-code-region)
+	    (setq edit-buffer (get-buffer-create
+			       (format "*Hybrid Source Edit - %s*"
+				       (buffer-name base-buffer))))
+	    (copy-to-buffer edit-buffer code-beg code-end)
+	    (with-current-buffer edit-buffer
+	      (funcall target-major-mode)
+	      (set (make-local-variable 'hse-base-buffer) base-buffer)
+	      (set (make-local-variable 'hse-code-block) code-region)
+	      (local-set-key "\C-c'" 'hse-update-and-kill)
+	      (local-set-key "\C-x\C-s" (lambda ()
+					  (interactive)
+					  (hse-send-changes-back t)))
+	      (pop-to-buffer edit-buffer))))))))
 
 (defun hse-update-and-kill ()
   "Ship the changes to the originating buffer and kill the edit buffer."
   (interactive)
   (hse-send-changes-back)
+  (let ((code-region hse-code-block))
+    (with-current-buffer hse-base-buffer
+      (delete-overlay code-region)))
   (quit-window t))
 
 (defun hse-send-changes-back (&optional save)
@@ -118,8 +118,8 @@ saved."
   ;; since hse-* are buffer-local, we'll have to make copies of them
   ;; first before handling the base buffer.
   (let ((new-code (buffer-substring-no-properties (point-min) (point-max)))
-	(code-beg hse-code-beg)
-	(code-end hse-code-end))
+	(code-beg (overlay-start hse-code-block))
+	(code-end (overlay-end hse-code-block)))
     (with-current-buffer hse-base-buffer
       (let ((current-point (point)))
 	(save-excursion
