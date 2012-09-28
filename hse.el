@@ -46,6 +46,12 @@ Each element looks like ((BEGIN-DELIMITER . END-DELIMITER) . MODE).
 BEGIN-DELIMITER and END-DELIMITER specify the beginning and ending of a code block.
 MODE is the major mode used for editing the code block.")
 
+(defface hse-code-region
+  '((((class color)
+      (min-colors 88))
+     :background "sky blue"))
+  "Face for highlighting the code region being edited.")
+
 (defun hse-edit-enclosing-code-block ()
   "Edit the enclosing code block around point.
 
@@ -78,6 +84,11 @@ this command and kill the edit buffer."
 	      (if (yes-or-no-p "Changes to another code block will be discarded. Proceed?")
 		  (kill-buffer edit-buffer)
 		(return)))
+	  (let ((code-region
+		 (make-overlay code-beg code-end (current-buffer) nil t)))
+	    (overlay-put code-region
+			 'face 'hse-code-region))
+	  
 	  (setq edit-buffer (get-buffer-create (format "*Hybrid Source Edit - %s*"
 						       (buffer-name base-buffer))))
 	  (copy-to-buffer edit-buffer code-beg code-end)
